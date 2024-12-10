@@ -2,7 +2,8 @@ import streamlit as st
 from pymongo import MongoClient
 import pandas as pd
 import bson
-from datetime import datetime
+from datetime import datetime, date  # Ensure both datetime and date are imported
+
 import hashlib
 import re
 import uuid
@@ -35,16 +36,6 @@ def generate_system_id(collection):
     except Exception as e:
         st.error(f"Error generating system ID: {e}")
         return 1
-
-# def generate_system_id(collection):
-#     """Generate a unique incremental ID for a collection."""
-#     last_doc = list(collection.find().sort('_id', -1).limit(1))
-#     if last_doc:
-#         field_name = list(last_doc[0].keys())[1]  # Assuming the second field is the ID field
-#         last_id = int(last_doc[0].get(field_name, 0) or 0)  # Ensure it's treated as an integer
-#         return last_id + 1
-#     return 1  # Start with 1 if no documents exist
-
 
 def hash_password(password):
     """Hash a password using SHA-256."""
@@ -236,7 +227,6 @@ def insert_record(collection, schema):
             import traceback
             st.error(traceback.format_exc())
 
-
 def update_record(collection, schema):
     st.subheader(f"Update Record in {collection.name}")
     
@@ -298,9 +288,25 @@ def update_record(collection, schema):
                                 key=unique_key
                             )
                         elif field['input_type'] == 'date':
+                            # Handle both datetime and date objects
+                            current_date = record[field['name']]
+                            if isinstance(current_date, datetime):
+                                current_date = current_date.date()
+                            
                             updated_value = st.date_input(
                                 field['name'], 
-                                value=record[field['name']] if field['name'] in record else datetime.now(),
+                                value=current_date if current_date else date.today(),
+                                key=unique_key
+                            )
+                        elif field['input_type'] == 'time':
+                            # Convert to time if it's a datetime
+                            current_time = record[field['name']]
+                            if isinstance(current_time, datetime):
+                                current_time = current_time.time()
+                            
+                            updated_value = st.time_input(
+                                field['name'],
+                                value=current_time,
                                 key=unique_key
                             )
                         elif field['input_type'] == 'select':
@@ -320,6 +326,10 @@ def update_record(collection, schema):
                         
                         # Only add to updated_data if the value has changed
                         if updated_value != record[field['name']]:
+                            # Convert date to datetime for MongoDB compatibility
+                            if isinstance(updated_value, date) and not isinstance(updated_value, datetime):
+                                updated_value = datetime.combine(updated_value, datetime.min.time())
+                            
                             updated_data[field['name']] = updated_value
                 
                 if st.button("Save Changes"):
